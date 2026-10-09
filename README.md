@@ -15,5 +15,10 @@ Nada sensível fica aqui: login, senha e chave do Firebase ficam em **secrets**,
 | `RASTRO_USERNAME` | usuário do painel Rastro Norte |
 | `RASTRO_PASSWORD` | senha do painel Rastro Norte |
 
+## Segurança
+- Dependências travadas em `package-lock.json` (`npm ci --ignore-scripts`): nada novo é baixado a cada execução.
+- Log público só com contagens; erros do Firebase/rede viram código (nunca a mensagem crua, que pode trazer caminho com placa ou hash).
+- Se o Rastro Norte mudar de formato, a execução FALHA (e-mail do GitHub) em vez de congelar a frota em silêncio; o painel do TMS também avisa quando o coletor para (`coletor/ultimo_ok`).
+
 ## Testes
 `npm test` (sem rede e sem Firebase). Nada aqui foi testado com o Rastro Norte nem com o Firebase reais: o primeiro teste é rodar o workflow **Coletar Rastro Norte** manualmente com **simular** marcado.

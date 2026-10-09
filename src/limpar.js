@@ -4,6 +4,7 @@ const { getDatabase } = require('firebase-admin/database');
 const { iniciar } = require('./firebase');
 const { getFirestore } = require('firebase-admin/firestore');
 const { chavesAntigas, copiasOrfas } = require('./estado');
+const { descreverErro } = require('./log');
 
 const HORAS = 48;
 
@@ -18,7 +19,9 @@ async function main() {
   let apagados = 0;
   for (const id of viagens) {
     const snap = await db.ref(`trilhas/${id}`).orderByKey().endAt(String(corte)).get();
-    const antigas = chavesAntigas(Object.keys(snap.val() || {}), corte);
+    // chaves que não são um instante (13 dígitos) não deveriam existir (as regras recusam): apaga junto, não ficam para sempre
+    const todas = Object.keys(snap.val() || {});
+    const antigas = [...chavesAntigas(todas, corte), ...todas.filter((k) => !/^\d{13}$/.test(k))];
     if (!antigas.length) continue;
     const remover = {};
     for (const k of antigas) remover[k] = null;
@@ -32,8 +35,14 @@ async function main() {
     const links = (await getFirestore().collection('links_cliente').get()).docs.map((d) => d.id);
     for (const k of copiasOrfas(Object.keys((await resPub.json()) || {}), links)) { await db.ref(`publico/${k}`).remove(); orfas += 1; }
   }
+  // Donos de cópia pública sem link correspondente
+  const resDono = await fetch(`${databaseURL.replace(/\/$/, '')}/publico_dono.json?shallow=true`, { headers: { Authorization: `Bearer ${token}` } });
+  if (resDono.ok) {
+    const links = (await getFirestore().collection('links_cliente').get()).docs.map((d) => d.id);
+    for (const k of copiasOrfas(Object.keys((await resDono.json()) || {}), links)) { await db.ref(`publico_dono/${k}`).remove(); orfas += 1; }
+  }
   console.log(`Cópias públicas órfãs apagadas: ${orfas}.`);
   console.log(`Limpeza: ${viagens.length} viagem(ns) verificada(s), ${apagados} ponto(s) com mais de ${HORAS} h apagado(s).`);
 }
 
-main().then(() => process.exit(0), (erro) => { console.error('ERRO:', erro.message); process.exit(1); });
+main().then(() => process.exit(0), (erro) => { console.error('ERRO:', descreverErro(erro)); process.exit(1); });

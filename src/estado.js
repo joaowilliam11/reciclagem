@@ -1,6 +1,7 @@
 // Decisão pura do alerta "sem sinal": abre uma vez quando o rastreador fica 15 min sem posição, sobe a gravidade com o tempo
 // e fecha quando volta. Não repete alerta a cada execução. Tempos em epoch ms.
 const SEM_SINAL_MIN = 15;
+const VOLTOU_MIN = 5; // só dá por normalizado com posição de menos de 5 min (rastreador em modo economia oscila entre 5 e 20 min)
 const RANK = { MEDIUM: 1, HIGH: 2, CRITICAL: 3 };
 
 const gravidadePor = (min) => (min > 60 ? 'CRITICAL' : min > 30 ? 'HIGH' : 'MEDIUM');
@@ -15,7 +16,7 @@ function decidirSemSinal({ anterior, ultimoTs, agora }) {
     if (RANK[severity] > RANK[anterior.severity || 'MEDIUM']) return { acao: 'escalar', severity, minutos };
     return { acao: null, severity: anterior.severity, minutos };
   }
-  return { acao: anterior?.alerta_id ? 'normalizar' : null, severity: null, minutos };
+  return { acao: anterior?.alerta_id && minutos < VOLTOU_MIN ? 'normalizar' : null, severity: anterior?.severity ?? null, minutos };
 }
 
 // Chaves de trilha (epoch ms em texto) mais antigas que o limite

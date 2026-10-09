@@ -28,16 +28,20 @@ const placaDoNome = (nome = '') => normalizarPlaca(String(nome).trim().split(/\s
 
 // Usa o campo `timestamp` (epoch em segundos); o campo `time` do painel vem ~7 h defasado.
 // Devolve só veículos com posição válida e placa reconhecível; `ignorados` conta o resto (sem detalhes).
-function normalizarItens(payload) {
+function normalizarItens(payload, agora = Date.now()) {
   const itens = Array.isArray(payload?.data) ? payload.data : [];
   const veiculos = [];
   let ignorados = 0;
   for (const it of itens) {
+    const vazio = (v) => v === null || v === undefined || v === '';
     const lat = Number(it.lat);
     const lon = Number(it.lng);
     const epoch = Number(it.timestamp);
     const placa = placaDoNome(it.name);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon) || !Number.isFinite(epoch) || epoch <= 0 || (lat === 0 && lon === 0)
+    // `timestamp` vem em SEGUNDOS: valor em milissegundos (formato mudou) ou fora de uma janela plausível é recusado, não gravado
+    const agoraS = Math.floor(agora / 1000);
+    if (vazio(it.lat) || vazio(it.lng) || !Number.isFinite(lat) || !Number.isFinite(lon) || !Number.isFinite(epoch) || epoch <= 0
+      || epoch < agoraS - 400 * 86400 || epoch > agoraS + 3600 || (lat === 0 && lon === 0)
       || Math.abs(lat) > 90 || Math.abs(lon) > 180 || !placaValida(placa)) { ignorados += 1; continue; }
     veiculos.push({ placa, lat, lon, vel: Math.max(0, Number(it.speed) || 0), ts: epoch * 1000 });
   }
@@ -68,7 +72,12 @@ class ClienteRastroNorte {
     let url = '/login';
     for (let salto = 0; salto < 4; salto += 1) {
       const res = await this.pedir(url);
-      if ([301, 302, 303].includes(res.status) && res.headers.get('location')) { url = res.headers.get('location'); continue; }
+      if ([301, 302, 303].includes(res.status) && res.headers.get('location')) {
+        const destino = new URL(res.headers.get('location'), this.base + (url.startsWith('/') ? url : `/${url}`));
+        if (destino.origin !== new URL(this.base).origin) throw new Error('redirecionamento para outro endereço recusado'); // o cookie de sessão não sai do painel
+        url = destino.pathname + destino.search;
+        continue;
+      }
       const token = extrairToken(await res.text());
       if (!token) throw new Error('token CSRF não encontrado na página de login');
       return token;
@@ -109,7 +118,7 @@ class ClienteRastroNorte {
       await this.entrar();
       payload = await this.itens();
     }
-    return normalizarItens(payload);
+    return normalizarItens(payload, Date.now());
   }
 }
 

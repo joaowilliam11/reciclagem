@@ -27,7 +27,7 @@ test('normalizarItens: usa timestamp em segundos, descarta inválidos sem lança
     { id: 4, name: 'CURTO', lat: -3, lng: -60, timestamp: 1760000000 },
     { id: 5, name: 'ABC1D24', lat: 95, lng: -60, timestamp: 1760000000 },
     { id: 6, name: 'ABC1D25', lat: -3, lng: -60, speed: -5, timestamp: 1760000000, time: 'defasado' },
-  ] });
+  ] }, 1760000100000);
   assert.deepStrictEqual([r.veiculos.length, r.ignorados, r.total], [2, 4, 6]);
   assert.deepStrictEqual(r.veiculos[0], { placa: 'OPH0E39', lat: -3.1, lon: -60, vel: 52, ts: 1760000000000 });
   assert.strictEqual(r.veiculos[1].vel, 0);
@@ -112,4 +112,38 @@ test('cópias públicas órfãs: só hashes válidos sem link', () => {
   const a = 'a'.repeat(64); const b = 'b'.repeat(64);
   assert.deepStrictEqual(copiasOrfas([a, b, 'lixo', '../x'], [a]), [b]);
   assert.deepStrictEqual(copiasOrfas([], [a]), []);
+});
+
+test('normalizarItens: timestamp em ms, no futuro, muito antigo ou lat nula são recusados', () => {
+  const agora = 1760000100000;
+  const base = { name: 'ABC1D23', lat: -3, lng: -60, speed: 1 };
+  const r = normalizarItens({ data: [
+    { ...base, timestamp: 1760000000 },                    // ok
+    { ...base, name: 'ABC1D24', timestamp: 1760000000000 }, // em milissegundos (formato mudou)
+    { ...base, name: 'ABC1D25', timestamp: 1760000000 + 7200 }, // 2 h no futuro
+    { ...base, name: 'ABC1D26', timestamp: 1760000000 - 500 * 86400 }, // 500 dias atrás
+    { ...base, name: 'ABC1D27', lat: null, timestamp: 1760000000 }, // lat nula não vira 0
+    { ...base, name: 'ABC1D28', lng: '', timestamp: 1760000000 },
+  ] }, agora);
+  assert.deepStrictEqual([r.veiculos.length, r.ignorados], [1, 5]);
+});
+
+test('sem sinal: histerese (oscilar entre 5 e 20 min não abre e fecha o alerta toda hora)', () => {
+  const aberto = { alerta_id: 'x', severity: 'MEDIUM' };
+  assert.strictEqual(decidirSemSinal({ anterior: aberto, ultimoTs: AGORA - 8 * MIN, agora: AGORA }).acao, null, '8 min: ainda não normaliza');
+  assert.strictEqual(decidirSemSinal({ anterior: aberto, ultimoTs: AGORA - 4 * MIN, agora: AGORA }).acao, 'normalizar');
+});
+
+test('log público não imprime mensagem crua de erro', () => {
+  const { descreverErro } = require('../src/log');
+  const ruim = Object.assign(new Error('Document projects/ra-tms/databases/(default)/documents/links_cliente/' + 'a'.repeat(64) + ' not found'), { code: 5 });
+  assert.strictEqual(descreverErro(ruim), '5');
+  assert.strictEqual(descreverErro(new Error('login recusado (status 302)')), 'login recusado (status 302)');
+  assert(!/[a-f0-9]{64}/.test(descreverErro(Object.assign(new Error('x'), { code: 'a'.repeat(64) }))));
+});
+
+test('cliente: redirecionamento para outro endereço é recusado', async () => {
+  const resposta = (status, corpo, cab = {}) => ({ status, text: async () => corpo, headers: { get: (k) => cab[k.toLowerCase()] ?? null, getSetCookie: () => [] } });
+  const c = new ClienteRastroNorte({ usuario: 'u', senha: 's', http: async () => resposta(302, '', { location: 'https://outro.exemplo/login' }) });
+  await assert.rejects(() => c.coletar(), /outro endereço/);
 });

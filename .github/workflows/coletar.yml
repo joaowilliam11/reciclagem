@@ -27,6 +27,8 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v7
         with:
           node-version: 24
@@ -38,9 +40,10 @@ jobs:
           C: ${{ secrets.RASTRO_PASSWORD }}
         run: |
           if [ -n "$A" ] && { [ "coletar" = limpar ] || { [ -n "$B" ] && [ -n "$C" ]; }; }; then echo "ok=true" >> "$GITHUB_OUTPUT"; else echo "::notice::Secrets ainda não cadastrados: nada a fazer."; echo "ok=false" >> "$GITHUB_OUTPUT"; fi
-      - name: Instalar firebase-admin
+      # Versão fixa pelo package-lock.json e sem scripts de instalação: este job roda com a chave de acesso ao banco
+      - name: Instalar dependências (travadas)
         if: steps.seg.outputs.ok == 'true'
-        run: npm install --no-save --no-package-lock --prefix .admin firebase-admin@13 --silent
+        run: npm ci --ignore-scripts --no-audit --no-fund --silent
       - name: Testes
         if: steps.seg.outputs.ok == 'true'
         run: npm test --silent
@@ -48,7 +51,6 @@ jobs:
         if: steps.seg.outputs.ok == 'true'
         run: node src/coletor.js
         env:
-          NODE_PATH: ${{ github.workspace }}/.admin/node_modules
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           RASTRO_USERNAME: ${{ secrets.RASTRO_USERNAME }}
           RASTRO_PASSWORD: ${{ secrets.RASTRO_PASSWORD }}
