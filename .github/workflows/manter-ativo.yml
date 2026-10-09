@@ -1,0 +1,27 @@
+# O GitHub desativa workflows agendados de repositório público sem atividade por 60 dias. Este grava um carimbo no dia 1 de cada mês
+# para manter a coleta ligada. Se um dia a coleta parar, abra Actions e confira se o agendamento não foi desativado.
+name: Manter agendamento ativo
+
+on:
+  schedule:
+    - cron: '0 12 1 * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  carimbo:
+    if: github.repository_owner == 'joaowilliam11'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Gravar carimbo
+        run: |
+          date -u +%Y-%m-%dT%H:%M:%SZ > .ultima-atividade
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .ultima-atividade
+          git commit -m "Mantém o agendamento ativo" || exit 0
+          git push

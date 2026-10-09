@@ -1,0 +1,8 @@
+{
+  "name": "ra-rastro-coletor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Coletor agendado (GitHub Actions) das posições do Rastro Norte para o Realtime Database do RA-TMS.",
+  "scripts": { "test": "node --test test/coletor.test.js" },
+  "license": "UNLICENSED"
+}

@@ -1,0 +1,28 @@
+# Apaga pontos de trilha com mais de 48 h (o Realtime Database gratuito tem 1 GB). Diário, 03:00 de Manaus.
+name: Limpar trilhas antigas
+
+on:
+  schedule:
+    - cron: '0 7 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  limpar:
+    if: github.repository_owner == 'joaowilliam11'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Instalar firebase-admin
+        run: npm install --no-save --no-package-lock --prefix .admin firebase-admin@13 --silent
+      - name: Limpar
+        run: node src/limpar.js
+        env:
+          NODE_PATH: ${{ github.workspace }}/.admin/node_modules
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}

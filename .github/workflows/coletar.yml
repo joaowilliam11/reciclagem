@@ -1,0 +1,44 @@
+# Coleta as posições do Rastro Norte e grava no Realtime Database do RA-TMS (rastro/<placa>); abre/fecha o alerta "sem sinal".
+# Agendado a cada 10 min (o GitHub pode atrasar alguns minutos). Manual: Actions > Coletar Rastro Norte > Run workflow (marque "simular" para só testar o login e a leitura, sem gravar).
+# Repositório PÚBLICO de propósito (minutos de Actions ilimitados): o log só mostra contagens, nunca placas, posições ou nomes.
+name: Coletar Rastro Norte
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+    inputs:
+      simular:
+        description: 'Só testar login e leitura (não grava nada)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: coletar-rastro
+  cancel-in-progress: false
+
+jobs:
+  coletar:
+    if: github.repository_owner == 'joaowilliam11'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Instalar firebase-admin
+        run: npm install --no-save --no-package-lock --prefix .admin firebase-admin@13 --silent
+      - name: Testes
+        run: npm test --silent
+      - name: Coletar
+        run: node src/coletor.js
+        env:
+          NODE_PATH: ${{ github.workspace }}/.admin/node_modules
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          RASTRO_USERNAME: ${{ secrets.RASTRO_USERNAME }}
+          RASTRO_PASSWORD: ${{ secrets.RASTRO_PASSWORD }}
+          DRY_RUN: ${{ inputs.simular && '1' || '0' }}
