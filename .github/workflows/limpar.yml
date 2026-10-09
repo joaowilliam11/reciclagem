@@ -19,9 +19,19 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
+      - name: Conferir secrets
+        id: seg
+        env:
+          A: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          B: ${{ secrets.RASTRO_USERNAME }}
+          C: ${{ secrets.RASTRO_PASSWORD }}
+        run: |
+          if [ -n "$A" ] && { [ "limpar" = limpar ] || { [ -n "$B" ] && [ -n "$C" ]; }; }; then echo "ok=true" >> "$GITHUB_OUTPUT"; else echo "::notice::Secrets ainda não cadastrados: nada a fazer."; echo "ok=false" >> "$GITHUB_OUTPUT"; fi
       - name: Instalar firebase-admin
+        if: steps.seg.outputs.ok == 'true'
         run: npm install --no-save --no-package-lock --prefix .admin firebase-admin@13 --silent
       - name: Limpar
+        if: steps.seg.outputs.ok == 'true'
         run: node src/limpar.js
         env:
           NODE_PATH: ${{ github.workspace }}/.admin/node_modules
