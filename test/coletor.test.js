@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { normalizarPlaca, placaValida } = require('../src/placa');
 const { normalizarItens, extrairToken, placaDoNome, CookieJar, ClienteRastroNorte } = require('../src/rastro');
-const { decidirSemSinal, chavesAntigas, gravidadePor } = require('../src/estado');
+const { decidirSemSinal, chavesAntigas, gravidadePor, linkVencido, copiasOrfas } = require('../src/estado');
 
 const MIN = 60000;
 const AGORA = Date.UTC(2026, 9, 9, 15, 0, 0);
@@ -95,4 +95,21 @@ test('cliente: login recusado e sessão expirada', async () => {
   } });
   const r = await expira.coletar();
   assert.deepStrictEqual([logins, r.total], [2, 0]);
+});
+
+test('links de cliente: vencem com a viagem, a data ou a desativação', () => {
+  const ok = { ativo: true, expira_em: AGORA + MIN };
+  assert.strictEqual(linkVencido({ link: ok, viagem: { status: 'em_andamento' }, agora: AGORA }), false);
+  assert.strictEqual(linkVencido({ link: ok, viagem: { status: 'finalizada' }, agora: AGORA }), true);
+  assert.strictEqual(linkVencido({ link: ok, viagem: { status: 'cancelada' }, agora: AGORA }), true);
+  assert.strictEqual(linkVencido({ link: ok, viagem: null, agora: AGORA }), true);
+  assert.strictEqual(linkVencido({ link: { ...ok, expira_em: AGORA - 1 }, viagem: { status: 'em_andamento' }, agora: AGORA }), true);
+  assert.strictEqual(linkVencido({ link: { ...ok, ativo: false }, viagem: { status: 'em_andamento' }, agora: AGORA }), true);
+  assert.strictEqual(linkVencido({ link: null, viagem: { status: 'em_andamento' } }), true);
+});
+
+test('cópias públicas órfãs: só hashes válidos sem link', () => {
+  const a = 'a'.repeat(64); const b = 'b'.repeat(64);
+  assert.deepStrictEqual(copiasOrfas([a, b, 'lixo', '../x'], [a]), [b]);
+  assert.deepStrictEqual(copiasOrfas([], [a]), []);
 });

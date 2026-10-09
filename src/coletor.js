@@ -6,7 +6,7 @@ const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { iniciar } = require('./firebase');
 const { ClienteRastroNorte } = require('./rastro');
 const { normalizarPlaca } = require('./placa');
-const { decidirSemSinal } = require('./estado');
+const { decidirSemSinal, linkVencido, HASH_RE } = require('./estado');
 
 async function placasComViagem(fs) {
   const snap = await fs.collection('viagens').where('status', '==', 'em_andamento').get();
@@ -17,6 +17,25 @@ async function placasComViagem(fs) {
     if (placa && v.iniciada_em) mapa.set(placa, d.id);
   }
   return mapa;
+}
+
+// Links de cliente: tira do ar o que venceu ou cuja viagem terminou (apaga links_cliente/<hash> e publico/<hash>)
+async function varrerLinks(fs, db, agora, simular) {
+  const snap = await fs.collection('links_cliente').get();
+  let removidos = 0;
+  for (const d of snap.docs) {
+    if (!HASH_RE.test(d.id)) continue; // id fora do padrão nunca vira caminho do banco
+    const link = d.data();
+    const viagem = link.viagem_id ? await fs.collection('viagens').doc(link.viagem_id).get() : null;
+    if (!linkVencido({ link, viagem: viagem?.exists ? viagem.data() : null, agora })) continue;
+    if (!simular) {
+      await db.ref(`publico/${d.id}`).remove();
+      await d.ref.delete();
+      if (viagem?.exists) await viagem.ref.update({ links_cliente_hashes: FieldValue.arrayRemove(d.id) }).catch(() => {});
+    }
+    removidos += 1;
+  }
+  return removidos;
 }
 
 async function main() {
@@ -73,6 +92,11 @@ async function main() {
     cont.normalizados += 1;
   }
 
+  // A limpeza de links nunca derruba a coleta (as posições já foram gravadas acima)
+  let linksRemovidos = 'erro';
+  try { linksRemovidos = await varrerLinks(fs, db, agora, simular); } catch (e) { console.error('Aviso: não consegui varrer os links:', e.message); }
+
+  console.log(`${simular ? '[simulação] ' : ''}Links de cliente encerrados: ${linksRemovidos}.`);
   console.log(`${simular ? '[simulação] ' : ''}Rastro Norte: ${veiculos.length} veículo(s) gravado(s), ${ignorados} ignorado(s) de ${total}. Viagens acompanhadas: ${viagens.size}. Alertas: ${JSON.stringify(cont)}.`);
 }
 

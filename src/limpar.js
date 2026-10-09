@@ -2,7 +2,8 @@
 // Lê só as chaves das viagens (shallow) e, de cada uma, só os pontos antigos: não baixa a trilha inteira.
 const { getDatabase } = require('firebase-admin/database');
 const { iniciar } = require('./firebase');
-const { chavesAntigas } = require('./estado');
+const { getFirestore } = require('firebase-admin/firestore');
+const { chavesAntigas, copiasOrfas } = require('./estado');
 
 const HORAS = 48;
 
@@ -24,6 +25,14 @@ async function main() {
     await db.ref(`trilhas/${id}`).update(remover);
     apagados += antigas.length;
   }
+  // Cópias públicas sem link (sobras de link encerrado): apaga
+  const resPub = await fetch(`${databaseURL.replace(/\/$/, '')}/publico.json?shallow=true`, { headers: { Authorization: `Bearer ${token}` } });
+  let orfas = 0;
+  if (resPub.ok) {
+    const links = (await getFirestore().collection('links_cliente').get()).docs.map((d) => d.id);
+    for (const k of copiasOrfas(Object.keys((await resPub.json()) || {}), links)) { await db.ref(`publico/${k}`).remove(); orfas += 1; }
+  }
+  console.log(`Cópias públicas órfãs apagadas: ${orfas}.`);
   console.log(`Limpeza: ${viagens.length} viagem(ns) verificada(s), ${apagados} ponto(s) com mais de ${HORAS} h apagado(s).`);
 }
 

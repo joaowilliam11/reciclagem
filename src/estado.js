@@ -21,4 +21,18 @@ function decidirSemSinal({ anterior, ultimoTs, agora }) {
 // Chaves de trilha (epoch ms em texto) mais antigas que o limite
 const chavesAntigas = (chaves, corte) => chaves.filter((k) => /^\d+$/.test(k) && Number(k) < corte);
 
-module.exports = { decidirSemSinal, chavesAntigas, SEM_SINAL_MIN, gravidadePor };
+// Link de cliente deve sair do ar? (igual a linkVencido do ra-tms) — viagem terminou/sumiu, link vencido ou desativado
+const HASH_RE = /^[a-f0-9]{64}$/;
+function linkVencido({ link, viagem, agora = Date.now() }) {
+  if (!link || link.ativo === false) return true;
+  if (Number.isFinite(link.expira_em) && link.expira_em < agora) return true;
+  return !viagem || viagem.status !== 'em_andamento';
+}
+
+// Cópias públicas que não têm mais link correspondente (sobras): chaves de publico/ que não estão entre os links existentes
+const copiasOrfas = (chavesPublicas, hashesDeLinks) => {
+  const vivos = new Set(hashesDeLinks);
+  return chavesPublicas.filter((k) => HASH_RE.test(k) && !vivos.has(k));
+};
+
+module.exports = { decidirSemSinal, chavesAntigas, SEM_SINAL_MIN, gravidadePor, linkVencido, copiasOrfas, HASH_RE };
